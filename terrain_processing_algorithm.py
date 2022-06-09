@@ -31,57 +31,62 @@ __copyright__ = '(C) 2022 by Kartoza'
 __revision__ = '$Format:%H$'
 
 from qgis.PyQt.QtCore import QCoreApplication
-from qgis.core import (QgsProcessing,
-                       QgsFeatureSink,
-                       QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFeatureSink)
+from qgis.core import (
+    QgsProcessing,
+    QgsFeatureSink,
+    QgsProcessingAlgorithm,
+    QgsProcessingParameterFeatureSource,
+    QgsProcessingParameterFeatureSink,
+    QgsProcessingParameterFolderDestination,
+    QgsProcessingParameterCrs,
+    QgsProcessingOutputFolder
+)
 
+from default import (
+    CD_OUTPUT_CRS,
+    CD_DESTINATION_FOLDER,
+    CD_SOURCE_CRS,
+    CD_SOURCE_FOLDER
+)
 
 class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
     """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
-
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
     """
-
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
-
-    OUTPUT = 'OUTPUT'
-    INPUT = 'INPUT'
 
     def initAlgorithm(self, config):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
         """
 
-        # We add the input vector features source. It can have any kind of
-        # geometry.
+        # NEEDS TO ACTUALLY BE AN INPUT FOLDER OPTION
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+            QgsProcessingParameterFolderDestination(
+                CD_SOURCE_FOLDER,
+                self.tr('Source folder'),
+                optional=False
             )
         )
 
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
         self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.OUTPUT,
-                self.tr('Output layer')
+            QgsProcessingParameterCrs(
+                CD_SOURCE_CRS,
+                self.tr('Source Coordinate System'),
+                optional=False
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterCrs(
+                CD_OUTPUT_CRS,
+                self.tr('Output Coordinate System'),
+                optional=False
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFolderDestination(
+                CD_DESTINATION_FOLDER,
+                self.tr('Destination folder'),
+                optional=False
             )
         )
 
@@ -90,28 +95,33 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
         Here is where the processing itself takes place.
         """
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
+        dest_id = ''  # ONLY TEMP
 
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
+        source_folder = self.parameterAsSource(
+            parameters,
+            CD_SOURCE_FOLDER,
+            context
+        )
+        source_crs = self.parameterAsCrs(
+            parameters,
+            CD_SOURCE_CRS,
+            context
+        )
+        output_crs = self.parameterAsCrs(
+            parameters,
+            CD_OUTPUT_CRS,
+            context
+        )
+        destination_folder = self.parameterAsString(
+            parameters,
+            CD_DESTINATION_FOLDER,
+            context
+        )
 
-        for current, feature in enumerate(features):
+        while True:
             # Stop the algorithm if cancel button has been clicked
             if feedback.isCanceled():
                 break
-
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
 
         # Return the results of the algorithm. In this case our only result is
         # the feature sink which contains the processed features, but some
@@ -119,7 +129,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
         # statistics, etc. These should all be included in the returned
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
-        return {self.OUTPUT: dest_id}
+        #return {self.OUTPUT: dest_id}
 
     def name(self):
         """
