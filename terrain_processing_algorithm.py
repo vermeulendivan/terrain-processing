@@ -30,7 +30,9 @@ __copyright__ = '(C) 2022 by Kartoza'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication
+import os
+
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (
     QgsProcessing,
     QgsFeatureSink,
@@ -42,12 +44,32 @@ from qgis.core import (
     QgsProcessingOutputFolder
 )
 
-from default import (
+from qgis.core import (
+    QgsProject,
+    QgsSettings,
+    QgsVectorFileWriter,
+    QgsVectorLayer,
+    QgsField,
+    QgsCoordinateTransform,
+    QgsPointXY,
+    QgsFeature,
+    QgsCoordinateReferenceSystem,
+    QgsGeometry
+)
+
+from .default import (
     CD_OUTPUT_CRS,
     CD_DESTINATION_FOLDER,
     CD_SOURCE_CRS,
-    CD_SOURCE_FOLDER
+    CD_SOURCE_FOLDER,
+    ALLOWED_FORMATS
 )
+from .utilities import (
+    search_files,
+    create_vector_file,
+    create_empty_layer
+)
+
 
 class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
     """
@@ -70,7 +92,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterCrs(
                 CD_SOURCE_CRS,
                 self.tr('Source Coordinate System'),
-                optional=False
+                optional=True
             )
         )
 
@@ -78,7 +100,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterCrs(
                 CD_OUTPUT_CRS,
                 self.tr('Output Coordinate System'),
-                optional=False
+                optional=True
             )
         )
 
@@ -86,7 +108,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFolderDestination(
                 CD_DESTINATION_FOLDER,
                 self.tr('Destination folder'),
-                optional=False
+                optional=True
             )
         )
 
@@ -94,10 +116,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
         """
         Here is where the processing itself takes place.
         """
-
-        dest_id = ''  # ONLY TEMP
-
-        source_folder = self.parameterAsSource(
+        source_folder = self.parameterAsString(
             parameters,
             CD_SOURCE_FOLDER,
             context
@@ -118,18 +137,50 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
             context
         )
 
-        while True:
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
+        list_files = search_files(source_folder + '/', ALLOWED_FORMATS)
+        total = len(list_files)
+        completed = 0
+        for current_file in list_files:
+            feedback.setProgressText("Current file being processed: {}".format(current_file))
 
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        #return {self.OUTPUT: dest_id}
+            list_attributes = [
+                QgsField("Longitude", QVariant.Double),
+                QgsField("Latitude", QVariant.Double),
+                QgsField("Elevation", QVariant.Double)
+            ]
+            new_layer = create_empty_layer("Point", list_attributes, source_crs)
+            layer_provider = new_layer.dataProvider()
+
+            with open(current_file) as read_file:
+                lines = read_file.readlines()
+                for line in lines:
+                    # Stop the algorithm if cancel button has been clicked
+                    if feedback.isCanceled():
+                        break
+
+                    split = line.split(' ')
+                    x = float(split[0])
+                    y = float(split[1])
+                    elev = float(split[2])
+
+                    new_layer.startEditing()
+                    new_point = QgsPointXY(x, y)
+                    new_feature = QgsFeature()
+                    new_feature.setAttributes([x, y, elev])
+                    new_feature.setGeometry(QgsGeometry.fromPointXY(new_point))
+                    layer_provider.addFeatures([new_feature])
+                    new_layer.commitChanges()
+
+            output_file_name = os.path.basename(current_file)
+            destination_file = destination_folder + '/' + output_file_name
+
+            success, created_qgsvectorlayer, msg = create_vector_file(new_layer, destination_file, output_crs)
+
+            completed = completed + 1
+            feedback.setProgress(int((completed / total) * 100))
+
+        # Return the results of the algorithm
+        return {CD_DESTINATION_FOLDER: destination_folder}
 
     def name(self):
         """
