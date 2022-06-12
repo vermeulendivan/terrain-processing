@@ -191,8 +191,6 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
                         # Feature will be skipped/ignored
                         continue
 
-                    return
-
             output_file_name = os.path.basename(current_file)
             destination_file = destination_folder + '/' + output_file_name
 
