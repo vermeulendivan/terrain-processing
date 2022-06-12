@@ -31,7 +31,9 @@ __copyright__ = '(C) 2022 by Kartoza'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .terrain_processing_algorithm import TerrainProcessingAlgorithm
+from .terrain_point_preprocessing_algorithm import TerrainPointPreprocessingAlgorithm
+from .terrain_rasterize_points_algorithm import TerrainRasterizePointsAlgorithm
+from .terrain_point_create_ascii import TerrainCreateAsciiAlgorithm
 
 
 class TerrainProcessingProvider(QgsProcessingProvider):
@@ -53,7 +55,9 @@ class TerrainProcessingProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(TerrainProcessingAlgorithm())
+        self.addAlgorithm(TerrainPointPreprocessingAlgorithm())
+        self.addAlgorithm(TerrainRasterizePointsAlgorithm())
+        self.addAlgorithm(TerrainCreateAsciiAlgorithm())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 

@@ -1,6 +1,7 @@
 """Utilities module."""
 
 import os
+import re
 
 from qgis.core import (
     QgsProject,
@@ -15,7 +16,9 @@ from qgis.core import (
 )
 
 from .default import (
-    ALLOWED_FORMATS
+    ALLOWED_FORMATS,
+    STR_SPLIT_CHARS,
+    DELIMITER_CHAR
 )
 
 
@@ -81,3 +84,29 @@ def create_vector_file(input_layer, output_layer, layer_crs):
     new_layer = QgsVectorLayer(output_layer, output_file_name)
 
     return True, new_layer, 'Successfully created {}'.format(output_layer)
+
+
+def remove_unwanted_chars(string):
+    new_string = ''
+    index = 0
+    # Removes unwanted characters at the start of the string
+    for char in string:
+        if char not in STR_SPLIT_CHARS:
+            new_string = string[index:]
+            break
+        index = index + 1
+
+    # Removes all duplicate delimiter chars and replaces with a default delimiter
+    for split_char in STR_SPLIT_CHARS:
+        new_string = re.sub(split_char + '+', DELIMITER_CHAR, new_string)
+
+    index = len(new_string) - 1
+    # Removes unwanted characters from the end of the string
+    while index > 0:
+        char = new_string[index]
+        if char not in STR_SPLIT_CHARS:
+            new_string = new_string[:index]
+            break
+        index = index - 1
+
+    return new_string

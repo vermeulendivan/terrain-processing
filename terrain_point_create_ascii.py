@@ -62,16 +62,22 @@ from .default import (
     CD_DESTINATION_FOLDER,
     CD_SOURCE_CRS,
     CD_SOURCE_FOLDER,
-    ALLOWED_FORMATS
+    ALLOWED_FORMATS,
+    DELIMITER_CHAR,
+    COLUMN_COUNT,
+    X_INDEX,
+    Y_INDEX,
+    ELEV_INDEX
 )
 from .utilities import (
     search_files,
     create_vector_file,
-    create_empty_layer
+    create_empty_layer,
+    remove_unwanted_chars
 )
 
 
-class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
+class TerrainCreateAsciiAlgorithm(QgsProcessingAlgorithm):
     """
     """
 
@@ -143,13 +149,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
         for current_file in list_files:
             feedback.setProgressText("Current file being processed: {}".format(current_file))
 
-            list_attributes = [
-                QgsField("Longitude", QVariant.Double),
-                QgsField("Latitude", QVariant.Double),
-                QgsField("Elevation", QVariant.Double)
-            ]
-            new_layer = create_empty_layer("Point", list_attributes, source_crs)
-            layer_provider = new_layer.dataProvider()
+            print(current_file)
 
             with open(current_file) as read_file:
                 lines = read_file.readlines()
@@ -158,23 +158,19 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
                     if feedback.isCanceled():
                         break
 
-                    split = line.split(' ')
-                    x = float(split[0])
-                    y = float(split[1])
-                    elev = float(split[2])
+                    new_line = remove_unwanted_chars(line)
 
-                    new_layer.startEditing()
-                    new_point = QgsPointXY(x, y)
-                    new_feature = QgsFeature()
-                    new_feature.setAttributes([x, y, elev])
-                    new_feature.setGeometry(QgsGeometry.fromPointXY(new_point))
-                    layer_provider.addFeatures([new_feature])
-                    new_layer.commitChanges()
+                    split = new_line.split(DELIMITER_CHAR)
+                    if len(split) >= COLUMN_COUNT:
+                        x = split[X_INDEX]
+                        y = split[Y_INDEX]
+                        elev = split[ELEV_INDEX]
+                    else:
+                        # Line does not consist of the correct number of columns
+                        # So it will be skipped/ignored
+                        continue
 
-            output_file_name = os.path.basename(current_file)
-            destination_file = destination_folder + '/' + output_file_name
-
-            success, created_qgsvectorlayer, msg = create_vector_file(new_layer, destination_file, output_crs)
+                    return
 
             completed = completed + 1
             feedback.setProgress(int((completed / total) * 100))
@@ -190,7 +186,7 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Convert data'
+        return 'Create ESRI ASCII file'
 
     def displayName(self):
         """
@@ -220,4 +216,4 @@ class TerrainProcessingAlgorithm(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return TerrainProcessingAlgorithm()
+        return TerrainCreateAsciiAlgorithm()
