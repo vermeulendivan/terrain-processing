@@ -170,9 +170,9 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
 
                     split = new_line.split(DELIMITER_CHAR)
                     if len(split) >= COLUMN_COUNT:
-                        x = split[X_INDEX]
-                        y = split[Y_INDEX]
-                        elev = split[ELEV_INDEX]
+                        x = float(split[X_INDEX])
+                        y = float(split[Y_INDEX])
+                        elev = float(split[ELEV_INDEX])
 
                         if elev < ELEV_MIN_THRESHOLD or elev > ELEV_MAX_THRESHOLD:
                             # Elevation value is not valid
