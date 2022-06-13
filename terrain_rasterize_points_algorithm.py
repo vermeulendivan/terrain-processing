@@ -30,6 +30,7 @@ __copyright__ = '(C) 2022 by Kartoza'
 
 __revision__ = '$Format:%H$'
 
+import qgis
 import os
 
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
@@ -41,7 +42,9 @@ from qgis.core import (
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFolderDestination,
     QgsProcessingParameterCrs,
-    QgsProcessingOutputFolder
+    QgsProcessingOutputFolder,
+    QgsProcessingParameterEnum,
+    QgsApplication
 )
 
 from qgis.core import (
@@ -57,12 +60,21 @@ from qgis.core import (
     QgsGeometry
 )
 
+from qgis.analysis import QgsNativeAlgorithms
+import processing
+from processing.core.Processing import Processing
+Processing.initialize()
+QgsApplication.processingRegistry().addProvider(QgsNativeAlgorithms())
+
 from .default import (
     CD_OUTPUT_CRS,
     CD_DESTINATION_FOLDER,
     CD_SOURCE_CRS,
     CD_SOURCE_FOLDER,
-    ALLOWED_VECTOR_FORMATS
+    ALLOWED_VECTOR_FORMATS,
+    RASTERIZE_OPTIONS,
+    NEARSET_NEIGHBOUR,
+    RASTERIZE_TYPE
 )
 from .utilities import (
     search_files,
@@ -89,18 +101,11 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
-            QgsProcessingParameterCrs(
-                CD_SOURCE_CRS,
-                self.tr('Source Coordinate System'),
-                optional=True
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterCrs(
-                CD_OUTPUT_CRS,
-                self.tr('Output Coordinate System'),
-                optional=True
+            QgsProcessingParameterEnum(
+                RASTERIZE_TYPE,
+                self.tr(RASTERIZE_TYPE),
+                options=RASTERIZE_OPTIONS,
+                defaultValue=NEARSET_NEIGHBOUR
             )
         )
 
@@ -121,16 +126,6 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
             CD_SOURCE_FOLDER,
             context
         )
-        source_crs = self.parameterAsCrs(
-            parameters,
-            CD_SOURCE_CRS,
-            context
-        )
-        output_crs = self.parameterAsCrs(
-            parameters,
-            CD_OUTPUT_CRS,
-            context
-        )
         destination_folder = self.parameterAsString(
             parameters,
             CD_DESTINATION_FOLDER,
@@ -143,7 +138,30 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         for vector_file in list_files:
             feedback.setProgressText("Current file being processed: {}".format(vector_file))
 
+            output_file = destination_folder + '/' + 'test.sdat'
 
+            print("input: " + vector_file)
+            print("output: " + output_file)
+
+            tool = "saga:nearestneighbour"
+            parameters = {
+                'SHAPES': vector_file,
+                'FIELD': 'Elevation',
+                #'CV_METHOD': 0,  # Cross-validation disabled
+                #'CV_SUMMARY': 'TEMPORARY_OUTPUT',
+                #'CV_RESIDUALS': 'TEMPORARY_OUTPUT',
+                #'CV_SAMPLES': 10,
+                'TARGET_USER_XMIN TARGET_USER_XMAX TARGET_USER_YMIN TARGET_USER_YMAX': '-34775.000000000,-25475.000000000,2473600.000000000,2489450.000000000 [EPSG:2053]',
+                'TARGET_USER_SIZE': 25,
+                'TARGET_USER_FITS': 1,
+                'TARGET_OUT_GRID': output_file
+            }
+
+            print("before run")
+
+            processing.run(tool, parameters)
+
+            print("after run")
 
             completed = completed + 1
             feedback.setProgress(int((completed / total) * 100))

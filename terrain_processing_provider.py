@@ -33,7 +33,6 @@ __revision__ = '$Format:%H$'
 from qgis.core import QgsProcessingProvider
 from .terrain_point_preprocessing_algorithm import TerrainPointPreprocessingAlgorithm
 from .terrain_rasterize_points_algorithm import TerrainRasterizePointsAlgorithm
-from .terrain_point_create_ascii import TerrainCreateAsciiAlgorithm
 
 
 class TerrainProcessingProvider(QgsProcessingProvider):
@@ -57,7 +56,6 @@ class TerrainProcessingProvider(QgsProcessingProvider):
         """
         self.addAlgorithm(TerrainPointPreprocessingAlgorithm())
         self.addAlgorithm(TerrainRasterizePointsAlgorithm())
-        self.addAlgorithm(TerrainCreateAsciiAlgorithm())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 

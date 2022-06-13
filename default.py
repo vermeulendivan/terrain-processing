@@ -1,11 +1,13 @@
 """This module contains default values used by the plugin.
 """
 
-# Convert data algorithm
+# Algorithm parameters
 CD_SOURCE_FOLDER = 'Source folder'
 CD_SOURCE_CRS = 'Source Coordinate System'
 CD_OUTPUT_CRS = 'Output Coordinate System'
 CD_DESTINATION_FOLDER = 'Destination folder'
+
+RASTERIZE_TYPE = 'Rasterize algorithm'
 
 ALLOWED_FORMATS = [
     '.ort',
@@ -35,3 +37,12 @@ ELEV_INDEX = 2
 ELEV_MIN_THRESHOLD = -100
 ELEV_MAX_THRESHOLD = 8000
 
+NEARSET_NEIGHBOUR = 'Nearest neighbour (NN)'
+IDW = 'Inverse distance interpolation (IDW)'
+TIN = 'Triangulated irregular network (TIN)'
+
+RASTERIZE_OPTIONS = [
+    NEARSET_NEIGHBOUR,
+    IDW,
+    TIN
+]
