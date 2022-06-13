@@ -58,10 +58,10 @@ from qgis.core import (
 )
 
 from .default import (
-    CD_OUTPUT_CRS,
-    CD_DESTINATION_FOLDER,
-    CD_SOURCE_CRS,
-    CD_SOURCE_FOLDER,
+    OUTPUT_CRS,
+    DESTINATION_FOLDER,
+    SOURCE_CRS,
+    SOURCE_FOLDER,
     ALLOWED_FORMATS,
     DELIMITER_CHAR,
     COLUMN_COUNT,
@@ -90,32 +90,32 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
         # NEEDS TO ACTUALLY BE AN INPUT FOLDER OPTION
         self.addParameter(
             QgsProcessingParameterFolderDestination(
-                CD_SOURCE_FOLDER,
-                self.tr('Source folder'),
+                SOURCE_FOLDER,
+                self.tr(SOURCE_FOLDER),
                 optional=False
             )
         )
 
         self.addParameter(
             QgsProcessingParameterCrs(
-                CD_SOURCE_CRS,
-                self.tr('Source Coordinate System'),
-                optional=True
+                SOURCE_CRS,
+                self.tr(SOURCE_CRS),
+                optional=False
             )
         )
 
         self.addParameter(
             QgsProcessingParameterCrs(
-                CD_OUTPUT_CRS,
-                self.tr('Output Coordinate System'),
+                OUTPUT_CRS,
+                self.tr(OUTPUT_CRS),
                 optional=True
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFolderDestination(
-                CD_DESTINATION_FOLDER,
-                self.tr('Destination folder'),
+                DESTINATION_FOLDER,
+                self.tr(DESTINATION_FOLDER),
                 optional=True
             )
         )
@@ -126,81 +126,105 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
         """
         source_folder = self.parameterAsString(
             parameters,
-            CD_SOURCE_FOLDER,
+            SOURCE_FOLDER,
             context
         )
         source_crs = self.parameterAsCrs(
             parameters,
-            CD_SOURCE_CRS,
+            SOURCE_CRS,
             context
         )
         output_crs = self.parameterAsCrs(
             parameters,
-            CD_OUTPUT_CRS,
+            OUTPUT_CRS,
             context
         )
         destination_folder = self.parameterAsString(
             parameters,
-            CD_DESTINATION_FOLDER,
+            DESTINATION_FOLDER,
             context
         )
 
         list_files = search_files(source_folder + '/', ALLOWED_FORMATS)
         total = len(list_files)
         completed = 0
+        feedback.setProgress(0)
         for current_file in list_files:
-            feedback.setProgressText("Current file being processed: {}".format(current_file))
+            # Stop the algorithm if cancel button has been clicked
+            if feedback.isCanceled():
+                break
 
-            list_attributes = [
-                QgsField("Longitude", QVariant.Double),
-                QgsField("Latitude", QVariant.Double),
-                QgsField("Elevation", QVariant.Double)
-            ]
-            new_layer = create_empty_layer("Point", list_attributes, source_crs)
-            layer_provider = new_layer.dataProvider()
+            # Used for error monitoring
+            file_read_issue = False
+            read_error = ''
 
-            with open(current_file) as read_file:
-                lines = read_file.readlines()
-                for line in lines:
-                    # Stop the algorithm if cancel button has been clicked
-                    if feedback.isCanceled():
-                        break
-
-                    new_line = remove_unwanted_chars(line)
-
-                    split = new_line.split(DELIMITER_CHAR)
-                    if len(split) >= COLUMN_COUNT:
-                        x = float(split[X_INDEX])
-                        y = float(split[Y_INDEX])
-                        elev = float(split[ELEV_INDEX])
-
-                        if elev < ELEV_MIN_THRESHOLD or elev > ELEV_MAX_THRESHOLD:
-                            # Elevation value is not valid
-                            # Feature will be skipped/ignored
-                            continue
-                        else:
-                            new_layer.startEditing()
-                            new_point = QgsPointXY(x, y)
-                            new_feature = QgsFeature()
-                            new_feature.setAttributes([x, y, elev])
-                            new_feature.setGeometry(QgsGeometry.fromPointXY(new_point))
-                            layer_provider.addFeatures([new_feature])
-                            new_layer.commitChanges()
-                    else:
-                        # Line does not consist of the correct number of columns
-                        # Feature will be skipped/ignored
-                        continue
-
+            # File parameters
             output_file_name = os.path.basename(current_file)
-            destination_file = destination_folder + '/' + output_file_name
+            destination_file = destination_folder + '/' + output_file_name + '.gpkg'
 
-            success, created_qgsvectorlayer, msg = create_vector_file(new_layer, destination_file, output_crs)
+            if os.path.exists(destination_file):
+                # If the file does exist, it will be skipped
+                feedback.setProgressText("Current file will be skipped as it exists: {}".format(current_file))
+            else:
+                # File does not exist, processing starts
+                feedback.setProgressText("Current file being processed: {}".format(current_file))
+                list_attributes = [
+                    QgsField("Longitude", QVariant.Double),
+                    QgsField("Latitude", QVariant.Double),
+                    QgsField("Elevation", QVariant.Double)
+                ]
+                new_layer = create_empty_layer("Point", list_attributes, source_crs)
+                layer_provider = new_layer.dataProvider()
+
+                with open(current_file) as read_file:
+                    while True:
+                        try:
+                            line = read_file.readline()
+                            if not line:
+                                # End of file has been reached
+                                break
+                            new_line = remove_unwanted_chars(line)
+
+                            split = new_line.split(DELIMITER_CHAR)
+                            if len(split) == COLUMN_COUNT:
+                                x = float(split[X_INDEX])
+                                y = float(split[Y_INDEX])
+                                elev = float(split[ELEV_INDEX])
+
+                                if elev < ELEV_MIN_THRESHOLD or elev > ELEV_MAX_THRESHOLD:
+                                    # Elevation value is not valid
+                                    # Feature will be skipped/ignored
+                                    continue
+                                else:
+                                    new_layer.startEditing()
+                                    new_point = QgsPointXY(x, y)
+                                    new_feature = QgsFeature()
+                                    new_feature.setAttributes([x, y, elev])
+                                    new_feature.setGeometry(QgsGeometry.fromPointXY(new_point))
+                                    layer_provider.addFeatures([new_feature])
+                                    new_layer.commitChanges()
+                            else:
+                                # Line does not consist of the correct number of columns
+                                # Feature will be skipped/ignored
+                                continue
+                        except Exception as e:
+                            # Errorenous points will be skipped but reported
+                            file_read_issue = True
+                            read_error = str(e)
+                            continue
+
+                    if file_read_issue:
+                        # If there has been an issue when reading a file
+                        feedback.setProgressText("Error during processing: {}".format(current_file))
+                        feedback.setProgressText("Error message: {}".format(read_error))
+
+                success, created_qgsvectorlayer, msg = create_vector_file(new_layer, destination_file, output_crs)
 
             completed = completed + 1
             feedback.setProgress(int((completed / total) * 100))
 
         # Return the results of the algorithm
-        return {CD_DESTINATION_FOLDER: destination_folder}
+        return {DESTINATION_FOLDER: destination_folder}
 
     def name(self):
         """

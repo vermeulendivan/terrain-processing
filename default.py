@@ -2,12 +2,16 @@
 """
 
 # Algorithm parameters
-CD_SOURCE_FOLDER = 'Source folder'
-CD_SOURCE_CRS = 'Source Coordinate System'
-CD_OUTPUT_CRS = 'Output Coordinate System'
-CD_DESTINATION_FOLDER = 'Destination folder'
-
+SOURCE_FOLDER = 'Source folder'
+SOURCE_CRS = 'Source Coordinate System'
+OUTPUT_CRS = 'Output Coordinate System'
+DESTINATION_FOLDER = 'Destination folder'
 RASTERIZE_TYPE = 'Rasterize algorithm'
+RESOLUTION = 'Spatial resolution'
+NODATA_DESCRIPTION = 'Default NoData value'
+
+RES_DEFAULT = 25
+DEFAULT_NODATA = -9999
 
 ALLOWED_FORMATS = [
     '.ort',
@@ -37,11 +41,13 @@ ELEV_INDEX = 2
 ELEV_MIN_THRESHOLD = -100
 ELEV_MAX_THRESHOLD = 8000
 
+POINT_TO_RASTER = 'Point to raster'
 NEARSET_NEIGHBOUR = 'Nearest neighbour (NN)'
 IDW = 'Inverse distance interpolation (IDW)'
 TIN = 'Triangulated irregular network (TIN)'
 
 RASTERIZE_OPTIONS = [
+    POINT_TO_RASTER,
     NEARSET_NEIGHBOUR,
     IDW,
     TIN

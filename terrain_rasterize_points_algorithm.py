@@ -44,6 +44,7 @@ from qgis.core import (
     QgsProcessingParameterCrs,
     QgsProcessingOutputFolder,
     QgsProcessingParameterEnum,
+    QgsProcessingParameterNumber,
     QgsApplication
 )
 
@@ -67,14 +68,20 @@ Processing.initialize()
 QgsApplication.processingRegistry().addProvider(QgsNativeAlgorithms())
 
 from .default import (
-    CD_OUTPUT_CRS,
-    CD_DESTINATION_FOLDER,
-    CD_SOURCE_CRS,
-    CD_SOURCE_FOLDER,
+    OUTPUT_CRS,
+    DESTINATION_FOLDER,
+    SOURCE_CRS,
+    SOURCE_FOLDER,
     ALLOWED_VECTOR_FORMATS,
     RASTERIZE_OPTIONS,
     NEARSET_NEIGHBOUR,
-    RASTERIZE_TYPE
+    POINT_TO_RASTER,
+    IDW,
+    TIN,
+    RASTERIZE_TYPE,
+    RESOLUTION,
+    RES_DEFAULT,
+    DEFAULT_NODATA
 )
 from .utilities import (
     search_files,
@@ -94,8 +101,8 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         # NEEDS TO ACTUALLY BE AN INPUT FOLDER OPTION
         self.addParameter(
             QgsProcessingParameterFolderDestination(
-                CD_SOURCE_FOLDER,
-                self.tr('Source folder'),
+                SOURCE_FOLDER,
+                self.tr(SOURCE_FOLDER),
                 optional=False
             )
         )
@@ -105,15 +112,35 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
                 RASTERIZE_TYPE,
                 self.tr(RASTERIZE_TYPE),
                 options=RASTERIZE_OPTIONS,
-                defaultValue=NEARSET_NEIGHBOUR
+                defaultValue=POINT_TO_RASTER
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                RESOLUTION,
+                self.tr(RESOLUTION),
+                defaultValue=RES_DEFAULT,
+                optional=False,
+                type=QgsProcessingParameterNumber.Double
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                RESOLUTION,
+                self.tr(RESOLUTION),
+                defaultValue=RES_DEFAULT,
+                optional=False,
+                type=QgsProcessingParameterNumber.Double
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFolderDestination(
-                CD_DESTINATION_FOLDER,
-                self.tr('Destination folder'),
-                optional=True
+                DESTINATION_FOLDER,
+                self.tr(DESTINATION_FOLDER),
+                optional=False
             )
         )
 
@@ -123,12 +150,23 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         """
         source_folder = self.parameterAsString(
             parameters,
-            CD_SOURCE_FOLDER,
+            SOURCE_FOLDER,
+            context
+        )
+        rasterize_type_index = self.parameterAsEnum(
+            parameters,
+            RASTERIZE_TYPE,
+            context
+        )
+        rasterize_type = RASTERIZE_OPTIONS[rasterize_type_index]
+        spatial_res = self.parameterAsDouble(
+            parameters,
+            RESOLUTION,
             context
         )
         destination_folder = self.parameterAsString(
             parameters,
-            CD_DESTINATION_FOLDER,
+            DESTINATION_FOLDER,
             context
         )
 
@@ -136,40 +174,53 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         total = len(list_files)
         completed = 0
         for vector_file in list_files:
-            feedback.setProgressText("Current file being processed: {}".format(vector_file))
+            output_file_name = os.path.basename(vector_file)
+            destination_file = destination_folder + '/' + output_file_name + '.tif'
 
-            output_file = destination_folder + '/' + 'test.sdat'
+            if os.path.exists(destination_file):
+                # If the file does exist, it will be skipped
+                feedback.setProgressText("Current file will be skipped as it exists: {}".format(vector_file))
+            else:
+                # File does not exist, processing starts
+                feedback.setProgressText("Current file being processed: {}".format(vector_file))
 
-            print("input: " + vector_file)
-            print("output: " + output_file)
+                if rasterize_type == POINT_TO_RASTER:
+                    tool = "gdal:rasterize"
+                    parameters = {
+                        'INPUT': vector_file,
+                        'FIELD': 'Elevation',
+                        'BURN': -9999,
+                        'USE_Z': False,
+                        'UNITS': 1,  # 0: Pixels, 1: Coordinate system based
+                        'WIDTH': spatial_res,
+                        'HEIGHT': spatial_res,
+                        'EXTENT': None,
+                        'NODATA': -9999,
+                        'OPTIONS': '',
+                        'DATA_TYPE': 5,
+                        'INIT': None,
+                        'INVERT': False,
+                        'EXTRA': '',
+                        'OUTPUT': destination_file
+                    }
 
-            tool = "saga:nearestneighbour"
-            parameters = {
-                'SHAPES': vector_file,
-                'FIELD': 'Elevation',
-                #'CV_METHOD': 0,  # Cross-validation disabled
-                #'CV_SUMMARY': 'TEMPORARY_OUTPUT',
-                #'CV_RESIDUALS': 'TEMPORARY_OUTPUT',
-                #'CV_SAMPLES': 10,
-                'TARGET_USER_XMIN TARGET_USER_XMAX TARGET_USER_YMIN TARGET_USER_YMAX': '-34775.000000000,-25475.000000000,2473600.000000000,2489450.000000000 [EPSG:2053]',
-                'TARGET_USER_SIZE': 25,
-                'TARGET_USER_FITS': 1,
-                'TARGET_OUT_GRID': output_file
-            }
-
-            print("before run")
-
-            processing.run(tool, parameters)
-
-            print("after run")
+                    processing.run(tool, parameters)
+                elif rasterize_type == NEARSET_NEIGHBOUR:
+                    print("NN")
+                elif rasterize_type == IDW:
+                    print("IDW")
+                elif rasterize_type == TIN:
+                    print("TIN")
+                else:
+                    print("UNKOWN TYPE")
 
             completed = completed + 1
             feedback.setProgress(int((completed / total) * 100))
 
-            break
+        print("final merge")
 
         # Return the results of the algorithm
-        return {CD_DESTINATION_FOLDER: destination_folder}
+        return {DESTINATION_FOLDER: destination_folder}
 
     def name(self):
         """
