@@ -45,6 +45,7 @@ from qgis.core import (
     QgsProcessingOutputFolder,
     QgsProcessingParameterEnum,
     QgsProcessingParameterNumber,
+    QgsProcessingParameterRasterDestination,
     QgsApplication
 )
 
@@ -81,12 +82,15 @@ from .default import (
     RASTERIZE_TYPE,
     RESOLUTION,
     RES_DEFAULT,
-    DEFAULT_NODATA
+    DEFAULT_NODATA,
+    RASTER_OUTPUT
 )
 from .utilities import (
     search_files,
     create_vector_file,
-    create_empty_layer
+    create_empty_layer,
+    merge_rasters,
+    point_to_raster
 )
 
 
@@ -112,7 +116,8 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
                 RASTERIZE_TYPE,
                 self.tr(RASTERIZE_TYPE),
                 options=RASTERIZE_OPTIONS,
-                defaultValue=POINT_TO_RASTER
+                defaultValue=POINT_TO_RASTER,
+                optional=False
             )
         )
 
@@ -121,7 +126,7 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
                 RESOLUTION,
                 self.tr(RESOLUTION),
                 defaultValue=RES_DEFAULT,
-                optional=False,
+                optional=True,
                 type=QgsProcessingParameterNumber.Double
             )
         )
@@ -141,6 +146,15 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
                 DESTINATION_FOLDER,
                 self.tr(DESTINATION_FOLDER),
                 optional=False
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterDestination(
+                RASTER_OUTPUT,
+                self.tr(RASTER_OUTPUT),
+                defaultValue='',
+                optional=True
             )
         )
 
@@ -169,9 +183,19 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
             DESTINATION_FOLDER,
             context
         )
+        output_merged_raster = self.parameterAsFileOutput(
+            parameters,
+            RASTER_OUTPUT,
+            context
+        )
 
         list_files = search_files(source_folder + '/', ALLOWED_VECTOR_FORMATS)
-        total = len(list_files)
+        list_output_rasters = []
+        if output_merged_raster == '':
+            total = len(list_files)
+        else:
+            # Adds one to the total number of files if a mosaicked raster should be created
+            total = len(list_files) + 1
         completed = 0
         for vector_file in list_files:
             output_file_name = os.path.basename(vector_file)
@@ -180,31 +204,14 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
             if os.path.exists(destination_file):
                 # If the file does exist, it will be skipped
                 feedback.setProgressText("Current file will be skipped as it exists: {}".format(vector_file))
+                list_output_rasters.append(destination_file)
             else:
                 # File does not exist, processing starts
                 feedback.setProgressText("Current file being processed: {}".format(vector_file))
 
                 if rasterize_type == POINT_TO_RASTER:
-                    tool = "gdal:rasterize"
-                    parameters = {
-                        'INPUT': vector_file,
-                        'FIELD': 'Elevation',
-                        'BURN': -9999,
-                        'USE_Z': False,
-                        'UNITS': 1,  # 0: Pixels, 1: Coordinate system based
-                        'WIDTH': spatial_res,
-                        'HEIGHT': spatial_res,
-                        'EXTENT': None,
-                        'NODATA': -9999,
-                        'OPTIONS': '',
-                        'DATA_TYPE': 5,
-                        'INIT': None,
-                        'INVERT': False,
-                        'EXTRA': '',
-                        'OUTPUT': destination_file
-                    }
-
-                    processing.run(tool, parameters)
+                    point_to_raster(vector_file, spatial_res, destination_file)
+                    list_output_rasters.append(destination_file)
                 elif rasterize_type == NEARSET_NEIGHBOUR:
                     print("NN")
                 elif rasterize_type == IDW:
@@ -217,7 +224,9 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
             completed = completed + 1
             feedback.setProgress(int((completed / total) * 100))
 
-        print("final merge")
+        if output_merged_raster != '':
+            merge_rasters(list_output_rasters, output_merged_raster)
+            feedback.setProgress(100)
 
         # Return the results of the algorithm
         return {DESTINATION_FOLDER: destination_folder}
@@ -230,7 +239,7 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Create raster tiles'
+        return '2 - Create rasters from GPKG point files'
 
     def displayName(self):
         """
@@ -254,7 +263,7 @@ class TerrainRasterizePointsAlgorithm(QgsProcessingAlgorithm):
         contain lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Preprocessing'
+        return 'Processing'
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)

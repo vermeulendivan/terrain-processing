@@ -4,6 +4,17 @@ import os
 import re
 
 from qgis.core import (
+    QgsProcessing,
+    QgsApplication
+)
+
+from qgis.analysis import QgsNativeAlgorithms
+import processing
+from processing.core.Processing import Processing
+Processing.initialize()
+QgsApplication.processingRegistry().addProvider(QgsNativeAlgorithms())
+
+from qgis.core import (
     QgsProject,
     QgsSettings,
     QgsVectorFileWriter,
@@ -18,7 +29,8 @@ from qgis.core import (
 from .default import (
     ALLOWED_FORMATS,
     STR_SPLIT_CHARS,
-    DELIMITER_CHAR
+    DELIMITER_CHAR,
+    DEFAULT_NODATA
 )
 
 
@@ -110,3 +122,51 @@ def remove_unwanted_chars(string):
         index = index - 1
 
     return new_string
+
+
+def point_to_raster(point_file, spatial_res, output_raster):
+    tool = "gdal:rasterize"
+    parameters = {
+        'INPUT': point_file,
+        'FIELD': 'Elevation',
+        'BURN': DEFAULT_NODATA,
+        'USE_Z': False,
+        'UNITS': 1,  # 0: Pixels, 1: Coordinate system based
+        'WIDTH': spatial_res,
+        'HEIGHT': spatial_res,
+        'EXTENT': None,
+        'NODATA': DEFAULT_NODATA,
+        'OPTIONS': '',
+        'DATA_TYPE': 5,
+        'INIT': None,
+        'INVERT': False,
+        'EXTRA': '',
+        'OUTPUT': output_raster
+    }
+    processing.run(tool, parameters)
+
+
+def merge_rasters(list_of_rasters, merged_raster):
+    tool = "gdal:merge"
+    parameters = {
+        'INPUT': list_of_rasters,
+        'PCT': False,
+        'Separate': False,
+        'NODATA_INPUT': DEFAULT_NODATA,
+        'NODATA_OUTPUT': DEFAULT_NODATA,
+        'OPTIONS': '',
+        'EXTRA': '',
+        'DATA_TYPE': 5,
+        'OUTPUT': merged_raster
+    }
+    processing.run(tool, parameters)
+
+
+def merge_vector_layers(list_of_layers, merged_vector_file, crs):
+    tool = "native:mergevectorlayers"
+    parameters = {
+        'LAYERS': list_of_layers,
+        'CRS': crs,
+        'OUTPUT': merged_vector_file
+    }
+    processing.run(tool, parameters)

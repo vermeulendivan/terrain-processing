@@ -41,6 +41,7 @@ from qgis.core import (
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFolderDestination,
     QgsProcessingParameterCrs,
+    QgsProcessingParameterVectorDestination,
     QgsProcessingOutputFolder
 )
 
@@ -60,6 +61,7 @@ from qgis.core import (
 from .default import (
     OUTPUT_CRS,
     DESTINATION_FOLDER,
+    POINT_VECTOR_OUTPUT,
     SOURCE_CRS,
     SOURCE_FOLDER,
     ALLOWED_FORMATS,
@@ -75,6 +77,7 @@ from .utilities import (
     search_files,
     create_vector_file,
     create_empty_layer,
+    merge_vector_layers,
     remove_unwanted_chars
 )
 
@@ -120,6 +123,15 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        self.addParameter(
+            QgsProcessingParameterVectorDestination(
+                POINT_VECTOR_OUTPUT,
+                self.tr(POINT_VECTOR_OUTPUT),
+                optional=True,
+                defaultValue=''
+            )
+        )
+
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -144,9 +156,19 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
             DESTINATION_FOLDER,
             context
         )
+        output_point_layer = self.parameterAsFileOutput(
+            parameters,
+            POINT_VECTOR_OUTPUT,
+            context
+        )
 
         list_files = search_files(source_folder + '/', ALLOWED_FORMATS)
-        total = len(list_files)
+        list_output_points = []
+        if output_point_layer == '':
+            total = len(list_files)
+        else:
+            # Adds one to the total count for when a merged point datasets will be created
+            total = len(list_files) + 1
         completed = 0
         feedback.setProgress(0)
         for current_file in list_files:
@@ -165,6 +187,7 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
             if os.path.exists(destination_file):
                 # If the file does exist, it will be skipped
                 feedback.setProgressText("Current file will be skipped as it exists: {}".format(current_file))
+                list_output_points.append(destination_file)
             else:
                 # File does not exist, processing starts
                 feedback.setProgressText("Current file being processed: {}".format(current_file))
@@ -219,9 +242,14 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
                         feedback.setProgressText("Error message: {}".format(read_error))
 
                 success, created_qgsvectorlayer, msg = create_vector_file(new_layer, destination_file, output_crs)
+                list_output_points.append(destination_file)
 
             completed = completed + 1
             feedback.setProgress(int((completed / total) * 100))
+
+        if output_point_layer != '':
+            merge_vector_layers(list_output_points, output_point_layer, output_crs)
+            feedback.setProgress(100)
 
         # Return the results of the algorithm
         return {DESTINATION_FOLDER: destination_folder}
@@ -234,7 +262,7 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Point Preprocessing'
+        return '1 - Point processing (Convert ASCII to GPKG)'
 
     def displayName(self):
         """
@@ -258,7 +286,7 @@ class TerrainPointPreprocessingAlgorithm(QgsProcessingAlgorithm):
         contain lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Preprocessing'
+        return 'Processing'
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
